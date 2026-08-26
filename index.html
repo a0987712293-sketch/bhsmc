@@ -1,0 +1,324 @@
+/*************************************************
+ * BHSMC Google Calendar 自動下一場法會 V2
+ * 功能：
+ * 1. 自動讀取 BHSMC 法會行事曆
+ * 2. 自動尋找現在時間之後的下一場活動
+ * 3. 輸出 JSONP 給 Webnode 使用
+ * 4. 防止 e.parameter.callback 報錯
+ * 5. 自動整理活動說明文字
+ *************************************************/
+
+
+// BHSMC 法會行事曆 ID
+const CALENDAR_ID =
+  '301fbdb25a4d893bbb8cebd851a02caf7caefa1c1f281acfc4a609182d3be7db@group.calendar.google.com';
+
+
+// 要納入「下一場活動」的關鍵字
+const KEYWORDS = [
+  '法會',
+  '薈供',
+  '共修',
+  '煙供',
+  '超渡',
+  '超薦',
+  '禪修',
+  '灌頂',
+  '祈福',
+  '修法',
+  '觀音',
+  '度母',
+  '蓮師',
+  '金剛薩埵'
+];
+
+
+/*************************************************
+ * 主程式
+ *************************************************/
+
+function doGet(e) {
+
+  try {
+
+    const calendar =
+      CalendarApp.getCalendarById(CALENDAR_ID);
+
+    if (!calendar) {
+
+      return outputJSONP(
+        {
+          ok: false,
+          message: '找不到 BHSMC 法會行事曆'
+        },
+        e
+      );
+
+    }
+
+
+    const now = new Date();
+
+    // 搜尋未來 180 天
+    const future =
+      new Date(
+        now.getTime() +
+        180 * 24 * 60 * 60 * 1000
+      );
+
+
+    let events =
+      calendar.getEvents(
+        now,
+        future
+      );
+
+
+    /*************************************************
+     * 篩選活動
+     *************************************************/
+
+    events =
+      events.filter(function(event) {
+
+        const title =
+          event.getTitle() || '';
+
+        return KEYWORDS.some(
+          function(keyword) {
+
+            return title.indexOf(keyword) !== -1;
+
+          }
+        );
+
+      });
+
+
+    /*************************************************
+     * 按時間排序
+     *************************************************/
+
+    events.sort(
+      function(a, b) {
+
+        return (
+          a.getStartTime().getTime()
+          -
+          b.getStartTime().getTime()
+        );
+
+      }
+    );
+
+
+    /*************************************************
+     * 沒有活動
+     *************************************************/
+
+    if (events.length === 0) {
+
+      return outputJSONP(
+        {
+          ok: true,
+          event: null,
+          message: '近期尚無公布活動'
+        },
+        e
+      );
+
+    }
+
+
+    /*************************************************
+     * 取得下一場活動
+     *************************************************/
+
+    const event =
+      events[0];
+
+
+    const result = {
+
+      ok: true,
+
+      generatedAt:
+        new Date().toISOString(),
+
+      event: {
+
+        title:
+          event.getTitle(),
+
+        start:
+          event
+            .getStartTime()
+            .toISOString(),
+
+        end:
+          event
+            .getEndTime()
+            .toISOString(),
+
+        location:
+          event.getLocation() || '',
+
+        description:
+          cleanDescription(
+            event.getDescription() || ''
+          ),
+
+        isAllDay:
+          event.isAllDayEvent()
+
+      }
+
+    };
+
+
+    return outputJSONP(
+      result,
+      e
+    );
+
+
+  } catch (error) {
+
+    return outputJSONP(
+      {
+        ok: false,
+        message: error.message
+      },
+      e
+    );
+
+  }
+
+}
+
+
+
+/*************************************************
+ * 清理 Google Calendar 說明文字
+ *************************************************/
+
+function cleanDescription(text) {
+
+  if (!text) {
+    return '';
+  }
+
+  return text
+
+    // HTML 標籤
+    .replace(/<[^>]*>/g, '')
+
+    // Markdown 類符號
+    .replace(/[*_#]/g, '')
+
+    // 多餘空白
+    .replace(/\r/g, '')
+
+    // 太多換行
+    .replace(/\n{3,}/g, '\n\n')
+
+    // 前後空白
+    .trim()
+
+    // 最多 1000 字
+    .substring(0, 1000);
+
+}
+
+
+
+/*************************************************
+ * JSONP 輸出
+ *
+ * 已修正：
+ * TypeError:
+ * Cannot read properties of undefined
+ * (reading 'callback')
+ *************************************************/
+
+function outputJSONP(data, e) {
+
+  // 預設 callback
+  let callback =
+    'bhsmcCalendarCallback';
+
+
+  // 安全檢查
+  if (
+    e &&
+    e.parameter &&
+    e.parameter.callback
+  ) {
+
+    callback =
+      e.parameter.callback;
+
+  }
+
+
+  // 只允許合法 JS 函式名稱
+  const safeCallback =
+    String(callback)
+      .replace(
+        /[^\w.$]/g,
+        ''
+      );
+
+
+  const content =
+    safeCallback
+    +
+    '('
+    +
+    JSON.stringify(data)
+    +
+    ');';
+
+
+  return ContentService
+
+    .createTextOutput(content)
+
+    .setMimeType(
+      ContentService.MimeType.JAVASCRIPT
+    );
+
+}
+
+
+
+/*************************************************
+ * 測試函式
+ *
+ * 不要直接用 doGet 測試
+ * 請執行 testDoGet()
+ *************************************************/
+
+function testDoGet() {
+
+  const fakeEvent = {
+
+    parameter: {
+
+      callback:
+        'bhsmcCalendarCallback'
+
+    }
+
+  };
+
+
+  const result =
+    doGet(fakeEvent);
+
+
+  Logger.log(
+    result.getContent()
+  );
+
+}
