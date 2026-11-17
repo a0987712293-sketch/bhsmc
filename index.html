@@ -1197,6 +1197,9 @@ function buildExportHTML(){
   return `<!DOCTYPE html>\n<html lang="zh-Hant-TW">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">\n<title>綠度母小故事 3D 互動立體繪本</title>\n${FONT_LINK}\n<style id="app-style">${$('#app-style').textContent}</style>\n</head>\n<body>\n<div id="app">${PRISTINE_APP}</div>\n<script type="text/plain" id="home-image">${HOME_SRC}${S}\n<script type="application/json" id="story-data">${$('#story-data').textContent}${S}\n<script type="application/json" id="voice-data">${voice}${S}\n${CDN.map(u=>`<script src="${u}">${S}`).join('\n')}\n<script id="app-main">${$('#app-main').textContent}${S}\n</body>\n</html>\n`;
 }
 $('#btnVoice').addEventListener('click',()=>{audioInit();renderVoicePanel();$('#voicePanel').hidden=false;});
+const EDIT_MODE=location.protocol==='file:'||/(^|[?#&])edit\b/.test(location.search+location.hash);
+if(!EDIT_MODE)$('#btnVoice').style.display='none';
+window.addEventListener('hashchange',()=>{if(/(^|[#&])edit\b/.test(location.hash))$('#btnVoice').style.display='';});
 $('#vgClose').addEventListener('click',()=>{$('#voicePanel').hidden=true;stopVoice();});
 $('#voicePanel').addEventListener('click',e=>{if(e.target.id==='voicePanel'){$('#voicePanel').hidden=true;stopVoice();}});
 $('#vgClear').addEventListener('click',()=>{VOICE={version:1,clips:[],lines:{}};A.buffers={};renderVoicePanel();toast('已清除語音（匯出後生效）');});
